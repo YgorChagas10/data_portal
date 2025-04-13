@@ -6,7 +6,7 @@ A web application for processing files, executing jobs, and managing logs. Built
 
 - File Processing
   - Convert files to Parquet format
-  - Convert files to PDSAS format
+  - Convert files to SAS7BDAT format
 - Log Management
   - View application logs
   - View job-specific logs
