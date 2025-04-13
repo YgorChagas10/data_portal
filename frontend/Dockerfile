@@ -4,10 +4,8 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Instalar dependências primeiro para aproveitar o cache do Docker
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
 # Copy the rest of the application
@@ -17,4 +15,4 @@ COPY . .
 EXPOSE 3000
 
 # Command to run the application
-CMD ["npm", "run", "dev"] 
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"] 

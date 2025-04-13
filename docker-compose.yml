@@ -1,16 +1,17 @@
 version: '3.8'
 
 services:
-  backend:
+  api:
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
       - "8001:8001"
-    environment:
-      - PYTHONUNBUFFERED=1
     volumes:
       - ./backend:/app
+      - /app/__pycache__
+    environment:
+      - PYTHONUNBUFFERED=1
     networks:
       - data-portal-network
 
@@ -20,10 +21,24 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
     environment:
-      - NEXT_PUBLIC_API_URL=http://backend:8001
+      - NEXT_PUBLIC_API_URL=http://api:8001
+    networks:
+      - data-portal-network
     depends_on:
-      - backend
+      - api
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: tail -f /app/app.log
+    volumes:
+      - ./backend:/app
     networks:
       - data-portal-network
 
