@@ -1,333 +1,276 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, FormEvent, ChangeEvent } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { Fragment } from 'react'
-import { StarIcon as StarOutline } from '@heroicons/react/24/outline'
-import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
+import apiService from '../services/api'
 
 interface SFTPConfigModalProps {
   isOpen: boolean
   onClose: () => void
-  onConnect: (config: SFTPConfig) => void
 }
 
-interface SFTPConfig {
-  host: string
-  port: number
-  username: string
-  password: string
-  name?: string
-}
-
-interface Favorite {
+interface SFTPCredentials {
   name: string
   host: string
   port: number
   username: string
+  password: string
 }
 
-export default function SFTPConfigModal({ isOpen, onClose, onConnect }: SFTPConfigModalProps) {
-  const [config, setConfig] = useState<SFTPConfig>({
+interface FavoriteConnection {
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  directory?: string;
+}
+
+const SFTPConfigModal: React.FC<SFTPConfigModalProps> = ({ isOpen, onClose }) => {
+  const [config, setConfig] = useState<SFTPCredentials>({
+    name: '',
     host: '',
     port: 22,
     username: '',
     password: '',
-    name: ''
   })
-
-  const [favorites, setFavorites] = useState<Favorite[]>([])
-  const [selectedFavorite, setSelectedFavorite] = useState<string | null>(null)
-  const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    loadFavorites()
-  }, [isOpen])
+  const [isLoading, setIsLoading] = useState(false)
+  const [favorites, setFavorites] = useState<FavoriteConnection[]>([])
+  const [isSaving, setIsSaving] = useState(false)
+  const [credentials, setCredentials] = useState<SFTPCredentials>({
+    name: '',
+    host: '',
+    port: 22,
+    username: '',
+    password: ''
+  })
+  const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
+  const [errorMessage, setErrorMessage] = useState<string>('')
 
   const loadFavorites = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/sftp/favorites')
-      if (response.ok) {
-        const data = await response.json()
-        setFavorites(data)
+      const response = await fetch('/api/sftp/favorites');
+      if (!response.ok) {
+        throw new Error('Failed to load favorites');
+      }
+      const data = await response.json();
+      setFavorites(data);
+    } catch (err) {
+      console.error('Error loading favorites:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadFavorites();
+  }, []);
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setError(null)
+    setIsLoading(true)
+
+    try {
+      const response = await apiService.testSFTPConnection(credentials)
+      
+      if (response.success) {
+        if (credentials.name && !isSaving) {
+          setIsSaving(true)
+          const saveResponse = await apiService.saveSFTPFavorite(credentials)
+          if (saveResponse.success) {
+            await loadFavorites()
+          }
+          setIsSaving(false)
+        }
+        onClose()
+      } else {
+        setError(response.error || 'Erro ao conectar ao servidor SFTP')
       }
     } catch (err) {
-      console.error('Error loading favorites:', err)
-      setError('Erro ao carregar favoritos')
+      setError('Erro ao conectar com o servidor')
+    } finally {
+      setIsLoading(false)
     }
   }
 
+  const handleFavoriteSelect = async (favorite: FavoriteConnection) => {
+    setConfig(favorite)
+  }
+
+  const handleFavoriteDelete = async (name: string) => {
+    const response = await apiService.deleteSFTPFavorite(name)
+    if (response.success) {
+      await loadFavorites()
+    }
+  }
+
+  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setCredentials(prev => ({
+      ...prev,
+      [name]: name === 'port' ? parseInt(value) || 22 : value
+    }));
+  };
+
   const handleSaveFavorite = async () => {
+    if (!credentials.name) {
+      setError('Please provide a name for the favorite connection');
+      return;
+    }
+
     try {
-      setIsSaving(true)
-      const response = await fetch('http://localhost:8000/api/sftp/favorites', {
+      const response = await fetch('/api/sftp/favorites', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(config),
-      })
+        body: JSON.stringify(credentials),
+      });
 
-      if (response.ok) {
-        await loadFavorites()
-        setError(null)
-      } else {
-        throw new Error('Failed to save favorite')
-      }
-    } catch (err) {
-      console.error('Error saving favorite:', err)
-      setError('Erro ao salvar favorito')
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleDeleteFavorite = async (name: string) => {
-    try {
-      const response = await fetch(`http://localhost:8000/api/sftp/favorites/${name}`, {
-        method: 'DELETE'
-      })
-
-      if (response.ok) {
-        await loadFavorites()
-        if (selectedFavorite === name) {
-          setSelectedFavorite(null)
-        }
-        setError(null)
-      }
-    } catch (err) {
-      console.error('Error deleting favorite:', err)
-      setError('Erro ao remover favorito')
-    }
-  }
-
-  const handleSelectFavorite = (favorite: Favorite) => {
-    setSelectedFavorite(favorite.name)
-    setConfig({
-      ...config,
-      host: favorite.host,
-      port: favorite.port,
-      username: favorite.username,
-      name: favorite.name
-    })
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    
-    if (!config.host || !config.port || !config.username || !config.password) {
-      setError('Please fill in all fields')
-      return
-    }
-
-    try {
-      const portNumber = parseInt(config.port.toString())
-      if (isNaN(portNumber) || portNumber <= 0 || portNumber > 65535) {
-        throw new Error('Invalid port number')
+      if (!response.ok) {
+        throw new Error('Failed to save favorite');
       }
 
-      await onConnect({
-        host: config.host,
-        port: portNumber,
-        username: config.username,
-        password: config.password,
-        name: config.name
-      })
+      await loadFavorites();
+      setError(null);
     } catch (err) {
-      setError('Invalid configuration. Please check your inputs.')
+      setError('Failed to save favorite connection');
     }
-  }
+  };
 
-  if (!isOpen) return null
+  const handleSelectFavorite = (favorite: FavoriteConnection) => {
+    setCredentials({
+      ...favorite,
+      password: '', // Don't load saved password for security
+    });
+  };
 
   return (
-    <Transition appear show={isOpen} as={Fragment}>
-      <Dialog as="div" className="relative z-[9999]" onClose={onClose}>
-        <Transition.Child
-          as={Fragment}
-          enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-        >
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
-        </Transition.Child>
+    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="mx-auto max-w-md rounded bg-white p-6">
+          <Dialog.Title className="text-lg font-medium mb-4">SFTP Configuration</Dialog.Title>
 
-        <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4 text-center">
-            <Transition.Child
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
-            >
-              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                <Dialog.Title
-                  as="h3"
-                  className="text-2xl font-bold text-gray-900 mb-6 text-center"
-                >
-                  SFTP Configuration
-                </Dialog.Title>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                Connection Name
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                value={credentials.name}
+                onChange={handleInputChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                placeholder="My SFTP Connection"
+              />
+            </div>
 
-                {/* Favoritos */}
-                {favorites.length > 0 && (
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold mb-2">Favoritos</h3>
-                    <div className="space-y-2">
-                      {favorites.map((favorite) => (
-                        <div
-                          key={favorite.name}
-                          className={`flex items-center justify-between p-2 rounded-md cursor-pointer ${
-                            selectedFavorite === favorite.name ? 'bg-purple-100' : 'hover:bg-gray-100'
-                          }`}
-                          onClick={() => handleSelectFavorite(favorite)}
-                        >
-                          <div>
-                            <p className="font-medium">{favorite.name}</p>
-                            <p className="text-sm text-gray-600">{favorite.host}</p>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeleteFavorite(favorite.name)
-                            }}
-                            className="text-red-500 hover:text-red-700"
-                          >
-                            Remover
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+            <div>
+              <label htmlFor="host" className="block text-sm font-medium text-gray-700">
+                Host
+              </label>
+              <input
+                type="text"
+                id="host"
+                name="host"
+                value={credentials.host}
+                onChange={handleInputChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                required
+              />
+            </div>
 
-                {error && (
-                  <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md text-center">
-                    {error}
-                  </div>
-                )}
+            <div>
+              <label htmlFor="port" className="block text-sm font-medium text-gray-700">
+                Port
+              </label>
+              <input
+                type="number"
+                id="port"
+                name="port"
+                value={credentials.port}
+                onChange={handleInputChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                required
+              />
+            </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div>
-                    <label htmlFor="name" className="block text-lg font-medium text-gray-700 mb-2">
-                      Nome da Conexão
-                    </label>
-                    <input
-                      type="text"
-                      id="name"
-                      value={config.name}
-                      onChange={(e) => setConfig({ ...config, name: e.target.value })}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-lg p-3"
-                      placeholder="Nome para salvar como favorito"
-                    />
-                  </div>
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                Username
+              </label>
+              <input
+                type="text"
+                id="username"
+                name="username"
+                value={credentials.username}
+                onChange={handleInputChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                required
+              />
+            </div>
 
-                  <div>
-                    <label htmlFor="host" className="block text-lg font-medium text-gray-700 mb-2">
-                      SFTP Server
-                    </label>
-                    <input
-                      type="text"
-                      id="host"
-                      value={config.host}
-                      onChange={(e) => setConfig({ ...config, host: e.target.value })}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-lg p-3"
-                      required
-                      placeholder="Enter SFTP server address"
-                      autoComplete="off"
-                    />
-                  </div>
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Password
+              </label>
+              <input
+                type="password"
+                id="password"
+                name="password"
+                value={credentials.password}
+                onChange={handleInputChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                required
+              />
+            </div>
 
-                  <div>
-                    <label htmlFor="port" className="block text-lg font-medium text-gray-700 mb-2">
-                      Port
-                    </label>
-                    <input
-                      type="number"
-                      id="port"
-                      value={config.port}
-                      onChange={(e) => setConfig({ ...config, port: parseInt(e.target.value) })}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-lg p-3"
-                      required
-                      min="1"
-                      max="65535"
-                      placeholder="Enter port number"
-                      autoComplete="off"
-                    />
-                  </div>
+            {error && (
+              <div className="text-red-600 text-sm">{error}</div>
+            )}
 
-                  <div>
-                    <label htmlFor="username" className="block text-lg font-medium text-gray-700 mb-2">
-                      Username
-                    </label>
-                    <input
-                      type="text"
-                      id="username"
-                      value={config.username}
-                      onChange={(e) => setConfig({ ...config, username: e.target.value })}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-lg p-3"
-                      required
-                      placeholder="Enter username"
-                      autoComplete="off"
-                    />
-                  </div>
+            <div className="flex justify-between gap-4">
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+              >
+                {isLoading ? 'Connecting...' : 'Connect'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveFavorite}
+                disabled={isLoading}
+                className="inline-flex justify-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              >
+                Save as Favorite
+              </button>
+            </div>
+          </form>
 
-                  <div>
-                    <label htmlFor="password" className="block text-lg font-medium text-gray-700 mb-2">
-                      Password
-                    </label>
-                    <input
-                      type="password"
-                      id="password"
-                      value={config.password}
-                      onChange={(e) => setConfig({ ...config, password: e.target.value })}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-lg p-3"
-                      required
-                      placeholder="Enter password"
-                      autoComplete="off"
-                    />
-                  </div>
-
-                  <div className="flex justify-end space-x-4">
-                    <button
-                      onClick={handleSaveFavorite}
-                      disabled={isSaving || !config.name}
-                      className={`flex items-center space-x-1 px-4 py-3 rounded-md ${
-                        isSaving || !config.name
-                          ? 'bg-gray-300 cursor-not-allowed'
-                          : 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                      }`}
-                    >
-                      {selectedFavorite ? <StarSolid className="h-5 w-5" /> : <StarOutline className="h-5 w-5" />}
-                      <span className="text-lg font-medium">{isSaving ? 'Salvando...' : 'Favorito'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="rounded-md border border-gray-300 bg-white px-6 py-3 text-lg font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="rounded-md border border-transparent bg-blue-600 px-6 py-3 text-lg font-medium text-white hover:bg-blue-700"
-                    >
-                      Connect
-                    </button>
-                  </div>
-                </form>
-              </Dialog.Panel>
-            </Transition.Child>
-          </div>
-        </div>
-      </Dialog>
-    </Transition>
+          {favorites.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Favorite Connections</h3>
+              <div className="space-y-2">
+                {favorites.map((favorite) => (
+                  <button
+                    key={favorite.name}
+                    onClick={() => handleSelectFavorite(favorite)}
+                    className="w-full text-left px-3 py-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {favorite.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </Dialog.Panel>
+      </div>
+    </Dialog>
   )
-} 
+}
+
+export default SFTPConfigModal 

@@ -4,6 +4,7 @@ import React, { Fragment, useState } from 'react'
 import { Menu } from '@headlessui/react'
 import LoginModal from './LoginModal'
 import SFTPConfigModal from './SFTPConfigModal'
+import ParquetWarningDialog from './ParquetWarningDialog'
 import { Bars3Icon } from '@heroicons/react/24/outline'
 import Image from 'next/image'
 
@@ -48,7 +49,7 @@ const navigationItems: NavigationItem[] = [
     requiresAuth: true,
     submenu: [
       { name: 'Convert to Parquet', href: '/file/parquet' },
-      { name: 'Convert to PDSAS', href: '/file/pdsas' },
+      { name: 'Convert to sas7bdat', href: '/file/sas7bdat' },
     ]
   },
   {
@@ -94,6 +95,7 @@ function classNames(...classes: string[]) {
 export default function Navigation({ onSubmenuSelect, onLogout }: NavigationProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isSFTPModalOpen, setIsSFTPModalOpen] = useState(false)
+  const [isParquetWarningOpen, setIsParquetWarningOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<NavigationItem | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
 
@@ -114,6 +116,12 @@ export default function Navigation({ onSubmenuSelect, onLogout }: NavigationProp
   }
 
   const handleSubmenuClick = (submenuItem: { name: string; href: string }, parentItem: NavigationItem) => {
+    if (submenuItem.name === 'Convert to Parquet') {
+      setIsParquetWarningOpen(true)
+      setIsMenuOpen(false)
+      return
+    }
+
     if (parentItem.requiresAuth) {
       setIsSFTPModalOpen(true)
       setIsMenuOpen(false)
@@ -147,6 +155,11 @@ export default function Navigation({ onSubmenuSelect, onLogout }: NavigationProp
     } catch (error) {
       console.error('SFTP connection error:', error)
     }
+  }
+
+  const handleParquetWarningConfirm = () => {
+    setIsParquetWarningOpen(false)
+    setIsSFTPModalOpen(true)
   }
 
   return (
@@ -240,10 +253,15 @@ export default function Navigation({ onSubmenuSelect, onLogout }: NavigationProp
         </div>
       </div>
 
+      <ParquetWarningDialog
+        isOpen={isParquetWarningOpen}
+        onClose={() => setIsParquetWarningOpen(false)}
+        onConfirm={handleParquetWarningConfirm}
+      />
+
       <SFTPConfigModal
         isOpen={isSFTPModalOpen}
         onClose={() => setIsSFTPModalOpen(false)}
-        onConnect={handleSFTPConnect}
       />
     </>
   )

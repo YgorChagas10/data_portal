@@ -47,7 +47,7 @@ app = FastAPI()
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -334,19 +334,21 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @app.post("/login")
 async def login_json(user: User):
     logger.info(f"Login attempt for user: {user.username}")
-    if not verify_user(user.username, user.password):
-        logger.error(f"Login failed for user: {user.username}")
-        raise HTTPException(
-            status_code=401,
-            detail="Incorrect username or password"
-        )
     
-    logger.info(f"Login successful for user: {user.username}")
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+    if verify_user(user.username, user.password):
+        logger.info(f"Login successful for user: {user.username}")
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.username}, expires_delta=access_token_expires
+        )
+        return {"access_token": access_token, "token_type": "bearer"}
+    
+    logger.error(f"Login failed for user: {user.username}")
+    raise HTTPException(
+        status_code=401,
+        detail="Incorrect username or password",
+        headers={"WWW-Authenticate": "Bearer"},
     )
-    return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/users/me")
 async def read_users_me(current_user: str = Depends(get_current_user)):

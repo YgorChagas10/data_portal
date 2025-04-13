@@ -3,6 +3,7 @@
 import React, { useState } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { Fragment } from 'react'
+import apiService from '../services/api'
 
 interface LoginModalProps {
   isOpen: boolean
@@ -20,33 +21,18 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
     e.preventDefault()
     setError('')
     setIsLoading(true)
-    console.log('Attempting login with:', { username })
 
     try {
-      console.log('Making login request...')
-      const response = await fetch('http://localhost:8001/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-      })
-
-      console.log('Response status:', response.status)
-      const data = await response.json()
-      console.log('Response data:', data)
-
-      if (!response.ok) {
-        console.error('Login failed:', data)
-        throw new Error(data.detail || 'Erro ao fazer login')
+      const response = await apiService.login(username, password)
+      
+      if (response.success && response.data?.access_token) {
+        onLogin(response.data.access_token)
+        onClose()
+      } else {
+        setError(response.error || 'Erro ao fazer login')
       }
-
-      console.log('Login successful, token received')
-      onLogin(data.access_token)
-      onClose()
     } catch (err) {
-      console.error('Login error:', err)
-      setError('Usuário ou senha incorretos')
+      setError('Erro ao conectar com o servidor')
     } finally {
       setIsLoading(false)
     }
