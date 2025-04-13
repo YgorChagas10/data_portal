@@ -1,3 +1,37 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Track files larger than 100MB with Git LFS
+*.[pP][dD][fF] filter=lfs diff=lfs merge=lfs -text
+*.[zZ][iI][pP] filter=lfs diff=lfs merge=lfs -text
+*.[rR][aA][rR] filter=lfs diff=lfs merge=lfs -text
+*.[7][zZ] filter=lfs diff=lfs merge=lfs -text
+*.[tT][aA][rR] filter=lfs diff=lfs merge=lfs -text
+*.[gG][zZ] filter=lfs diff=lfs merge=lfs -text
+*.[pP][aA][rR][qQ][uU][eE][tT] filter=lfs diff=lfs merge=lfs -text
+*.[cC][sS][vV] filter=lfs diff=lfs merge=lfs -text
+*.[xX][lL][sS][xX] filter=lfs diff=lfs merge=lfs -text
+*.[xX][lL][sS] filter=lfs diff=lfs merge=lfs -text
+*.[pP][nN][gG] filter=lfs diff=lfs merge=lfs -text
+*.[jJ][pP][gG] filter=lfs diff=lfs merge=lfs -text
+*.[jJ][pP][eE][gG] filter=lfs diff=lfs merge=lfs -text
+*.[gG][iI][fF] filter=lfs diff=lfs merge=lfs -text
+*.[pP][sS][dD] filter=lfs diff=lfs merge=lfs -text
+*.[aA][iI] filter=lfs diff=lfs merge=lfs -text
+*.[mM][pP]4 filter=lfs diff=lfs merge=lfs -text
+*.[mM][oO][vV] filter=lfs diff=lfs merge=lfs -text
+*.[aA][vV][iI] filter=lfs diff=lfs merge=lfs -text
+*.[wW][mM][vV] filter=lfs diff=lfs merge=lfs -text
+*.[fF][lL][vV] filter=lfs diff=lfs merge=lfs -text
+*.[mM][kK][vV] filter=lfs diff=lfs merge=lfs -text
+*.[mM][pP]3 filter=lfs diff=lfs merge=lfs -text
+*.[wW][aA][vV] filter=lfs diff=lfs merge=lfs -text
+*.[oO][gG][gG] filter=lfs diff=lfs merge=lfs -text
+*.[dD][bB] filter=lfs diff=lfs merge=lfs -text
+*.[sS][qQ][lL][iI][tT][eE] filter=lfs diff=lfs merge=lfs -text
+*.[mM][dD][fF] filter=lfs diff=lfs merge=lfs -text
+*.[iI][sS][oO] filter=lfs diff=lfs merge=lfs -text
+*.[dD][mM][gG] filter=lfs diff=lfs merge=lfs -text 
 *.node filter=lfs diff=lfs merge=lfs -text
 *.js filter=lfs diff=lfs merge=lfs -text
 *.map filter=lfs diff=lfs merge=lfs -text

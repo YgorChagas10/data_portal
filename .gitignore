@@ -1,0 +1,59 @@
+# Arquivos temporários
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Arquivos de log
+*.log
+logs/
+log/
+
+# Arquivos de cache
+.cache/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Arquivos de ambiente virtual Python
+venv/
+env/
+.env/
+.venv/
+
+# Arquivos de dependências
+node_modules/
+.npm/
+.yarn/
+
+# Arquivos de build
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Arquivos de IDE
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Arquivos grandes (>100MB)
+*.dump
+*.backup
+*.bak
+*.old
+*.archive
+
+# Arquivos de dados temporários
+*.temp_data/
+temp_data/
+data/temp/
+uploads/temp/ 
