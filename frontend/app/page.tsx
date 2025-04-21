@@ -13,6 +13,7 @@ export default function Home() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [token, setToken] = useState<string | null>(null)
+  const [userCredentials, setUserCredentials] = useState<{ username: string; password: string } | null>(null)
 
   useEffect(() => {
     // Verificar se já existe um token salvo
@@ -24,9 +25,10 @@ export default function Home() {
     }
   }, [])
 
-  const handleLogin = (newToken: string) => {
+  const handleLogin = (newToken: string, credentials: { username: string; password: string }) => {
     setToken(newToken)
     setIsAuthenticated(true)
+    setUserCredentials(credentials)
     localStorage.setItem('token', newToken)
   }
 
@@ -39,7 +41,7 @@ export default function Home() {
 
   const handleSFTPConnect = async (config: any) => {
     try {
-      const response = await fetch('http://localhost:8001/sftp/test', {
+      const response = await fetch('http://localhost:8000/sftp/test', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -96,7 +98,7 @@ export default function Home() {
         <SFTPConfigModal
           isOpen={isSFTPModalOpen}
           onClose={() => setIsSFTPModalOpen(false)}
-          onConnect={handleSFTPConnect}
+          userCredentials={userCredentials || undefined}
         />
       </main>
     </div>

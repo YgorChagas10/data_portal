@@ -4,10 +4,15 @@ import React, { useState, useEffect, FormEvent, ChangeEvent } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { Fragment } from 'react'
 import apiService from '../services/api'
+import SFTPFileBrowser from './SFTPFileBrowser'
 
 interface SFTPConfigModalProps {
   isOpen: boolean
   onClose: () => void
+  userCredentials?: {
+    username: string
+    password: string
+  }
 }
 
 interface SFTPCredentials {
@@ -26,7 +31,7 @@ interface FavoriteConnection {
   directory?: string;
 }
 
-const SFTPConfigModal: React.FC<SFTPConfigModalProps> = ({ isOpen, onClose }) => {
+const SFTPConfigModal: React.FC<SFTPConfigModalProps> = ({ isOpen, onClose, userCredentials }) => {
   const [config, setConfig] = useState<SFTPCredentials>({
     name: '',
     host: '',
@@ -47,19 +52,30 @@ const SFTPConfigModal: React.FC<SFTPConfigModalProps> = ({ isOpen, onClose }) =>
   })
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string>('')
+  const [authType, setAuthType] = useState<'login' | 'custom'>('login')
+  const [isFileBrowserOpen, setIsFileBrowserOpen] = useState(false)
 
   const loadFavorites = async () => {
     try {
-      const response = await fetch('/api/sftp/favorites');
-      if (!response.ok) {
-        throw new Error('Failed to load favorites');
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
       }
-      const data = await response.json();
-      setFavorites(data);
+
+      const response = await fetch('/api/sftp/favorites', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (!response.ok) {
+        throw new Error('Falha ao carregar favoritos')
+      }
+      const data = await response.json()
+      setFavorites(data)
     } catch (err) {
-      console.error('Error loading favorites:', err);
+      console.error('Erro ao carregar favoritos:', err)
     }
-  };
+  }
 
   useEffect(() => {
     loadFavorites();
@@ -71,21 +87,33 @@ const SFTPConfigModal: React.FC<SFTPConfigModalProps> = ({ isOpen, onClose }) =>
     setIsLoading(true)
 
     try {
-      const response = await apiService.testSFTPConnection(credentials)
-      
-      if (response.success) {
-        if (credentials.name && !isSaving) {
-          setIsSaving(true)
-          const saveResponse = await apiService.saveSFTPFavorite(credentials)
-          if (saveResponse.success) {
-            await loadFavorites()
-          }
-          setIsSaving(false)
-        }
-        onClose()
-      } else {
-        setError(response.error || 'Erro ao conectar ao servidor SFTP')
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
       }
+
+      const response = await fetch('http://localhost:8000/sftp/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(credentials),
+      })
+
+      if (!response.ok) {
+        throw new Error('Falha ao conectar ao servidor SFTP')
+      }
+
+      if (credentials.name && !isSaving) {
+        setIsSaving(true)
+        const saveResponse = await apiService.saveSFTPFavorite(credentials)
+        if (saveResponse.success) {
+          await loadFavorites()
+        }
+        setIsSaving(false)
+      }
+      setIsFileBrowserOpen(true)
     } catch (err) {
       setError('Erro ao conectar com o servidor')
     } finally {
@@ -94,13 +122,33 @@ const SFTPConfigModal: React.FC<SFTPConfigModalProps> = ({ isOpen, onClose }) =>
   }
 
   const handleFavoriteSelect = async (favorite: FavoriteConnection) => {
-    setConfig(favorite)
+    setCredentials({
+      ...favorite,
+      password: '', // Don't load saved password for security
+    })
   }
 
   const handleFavoriteDelete = async (name: string) => {
-    const response = await apiService.deleteSFTPFavorite(name)
-    if (response.success) {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
+
+      const response = await fetch(`/api/sftp/favorites/${name}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Falha ao excluir favorito')
+      }
+
       await loadFavorites()
+    } catch (err) {
+      console.error('Erro ao excluir favorito:', err)
     }
   }
 
@@ -114,29 +162,35 @@ const SFTPConfigModal: React.FC<SFTPConfigModalProps> = ({ isOpen, onClose }) =>
 
   const handleSaveFavorite = async () => {
     if (!credentials.name) {
-      setError('Please provide a name for the favorite connection');
-      return;
+      setError('Por favor, forneça um nome para a conexão favorita')
+      return
     }
 
     try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado')
+      }
+
       const response = await fetch('/api/sftp/favorites', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(credentials),
-      });
+      })
 
       if (!response.ok) {
-        throw new Error('Failed to save favorite');
+        throw new Error('Falha ao salvar favorito')
       }
 
-      await loadFavorites();
-      setError(null);
+      await loadFavorites()
+      setError(null)
     } catch (err) {
-      setError('Failed to save favorite connection');
+      setError('Falha ao salvar conexão favorita')
     }
-  };
+  }
 
   const handleSelectFavorite = (favorite: FavoriteConnection) => {
     setCredentials({
@@ -145,131 +199,218 @@ const SFTPConfigModal: React.FC<SFTPConfigModalProps> = ({ isOpen, onClose }) =>
     });
   };
 
+  const handleAuthTypeChange = (type: 'login' | 'custom') => {
+    setAuthType(type)
+    if (type === 'login' && userCredentials) {
+      setCredentials({
+        ...credentials,
+        host: 'gridcorporativo.redecord.br',
+        username: userCredentials.username,
+        password: userCredentials.password
+      })
+    } else {
+      setCredentials({
+        name: '',
+        host: '',
+        port: 22,
+        username: '',
+        password: ''
+      })
+    }
+  }
+
+  const handleFileSelect = (filePath: string) => {
+    console.log('Arquivo selecionado:', filePath)
+    onClose()
+  }
+
   return (
-    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <Dialog.Panel className="mx-auto max-w-md rounded bg-white p-6">
-          <Dialog.Title className="text-lg font-medium mb-4">SFTP Configuration</Dialog.Title>
+    <>
+      <Dialog open={isOpen} onClose={onClose} className="relative z-50">
+        <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-center justify-center p-4">
+          <Dialog.Panel className="mx-auto max-w-md rounded bg-white p-6">
+            <Dialog.Title className="text-lg font-medium mb-4">Configuração SFTP</Dialog.Title>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Connection Name
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tipo de Autenticação
               </label>
-              <input
-                type="text"
-                id="name"
-                name="name"
-                value={credentials.name}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                placeholder="My SFTP Connection"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="host" className="block text-sm font-medium text-gray-700">
-                Host
-              </label>
-              <input
-                type="text"
-                id="host"
-                name="host"
-                value={credentials.host}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="port" className="block text-sm font-medium text-gray-700">
-                Port
-              </label>
-              <input
-                type="number"
-                id="port"
-                name="port"
-                value={credentials.port}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                Username
-              </label>
-              <input
-                type="text"
-                id="username"
-                name="username"
-                value={credentials.username}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-                Password
-              </label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={credentials.password}
-                onChange={handleInputChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                required
-              />
-            </div>
-
-            {error && (
-              <div className="text-red-600 text-sm">{error}</div>
-            )}
-
-            <div className="flex justify-between gap-4">
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
-              >
-                {isLoading ? 'Connecting...' : 'Connect'}
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveFavorite}
-                disabled={isLoading}
-                className="inline-flex justify-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-              >
-                Save as Favorite
-              </button>
-            </div>
-          </form>
-
-          {favorites.length > 0 && (
-            <div className="mt-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-2">Favorite Connections</h3>
-              <div className="space-y-2">
-                {favorites.map((favorite) => (
-                  <button
-                    key={favorite.name}
-                    onClick={() => handleSelectFavorite(favorite)}
-                    className="w-full text-left px-3 py-2 rounded-md hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {favorite.name}
-                  </button>
-                ))}
+              <div className="flex space-x-4">
+                <button
+                  type="button"
+                  onClick={() => handleAuthTypeChange('login')}
+                  className={`px-4 py-2 rounded-md ${
+                    authType === 'login'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Usar Credenciais de Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAuthTypeChange('custom')}
+                  className={`px-4 py-2 rounded-md ${
+                    authType === 'custom'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Conexão Personalizada
+                </button>
               </div>
             </div>
-          )}
-        </Dialog.Panel>
-      </div>
-    </Dialog>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {authType === 'custom' && (
+                <>
+                  <div>
+                    <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                      Nome da Conexão
+                    </label>
+                    <input
+                      type="text"
+                      id="name"
+                      name="name"
+                      value={credentials.name}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      placeholder="Minha Conexão SFTP"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="host" className="block text-sm font-medium text-gray-700">
+                      Host
+                    </label>
+                    <input
+                      type="text"
+                      id="host"
+                      name="host"
+                      value={credentials.host}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="port" className="block text-sm font-medium text-gray-700">
+                      Porta
+                    </label>
+                    <input
+                      type="number"
+                      id="port"
+                      name="port"
+                      value={credentials.port}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="username" className="block text-sm font-medium text-gray-700">
+                      Usuário
+                    </label>
+                    <input
+                      type="text"
+                      id="username"
+                      name="username"
+                      value={credentials.username}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                      Senha
+                    </label>
+                    <input
+                      type="password"
+                      id="password"
+                      name="password"
+                      value={credentials.password}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      required
+                    />
+                  </div>
+
+                  {favorites.length > 0 && (
+                    <div className="mt-4">
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Conexões Salvas</h3>
+                      <div className="space-y-2">
+                        {favorites.map((favorite) => (
+                          <div key={favorite.name} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectFavorite(favorite)}
+                              className="text-sm text-gray-700 hover:text-indigo-600"
+                            >
+                              {favorite.name}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleFavoriteDelete(favorite.name)}
+                              className="text-sm text-red-600 hover:text-red-800"
+                            >
+                              Remover
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {authType === 'login' && (
+                <div className="p-4 bg-gray-50 rounded-md">
+                  <p className="text-sm text-gray-600">
+                    Usando credenciais de login para conectar ao gridcorporativo.redecord.br
+                  </p>
+                </div>
+              )}
+
+              {error && (
+                <div className="text-red-600 text-sm">{error}</div>
+              )}
+
+              <div className="flex justify-between gap-4">
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+                >
+                  {isLoading ? 'Conectando...' : 'Conectar'}
+                </button>
+                {authType === 'custom' && (
+                  <button
+                    type="button"
+                    onClick={handleSaveFavorite}
+                    disabled={isLoading}
+                    className="inline-flex justify-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                  >
+                    Salvar como Favorito
+                  </button>
+                )}
+              </div>
+            </form>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
+
+      <SFTPFileBrowser
+        isOpen={isFileBrowserOpen}
+        onClose={() => setIsFileBrowserOpen(false)}
+        onFileSelect={handleFileSelect}
+        credentials={credentials}
+      />
+    </>
   )
 }
 

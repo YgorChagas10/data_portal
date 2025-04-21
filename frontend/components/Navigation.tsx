@@ -138,7 +138,7 @@ export default function Navigation({ onSubmenuSelect, onLogout }: NavigationProp
     password: string
   }) => {
     try {
-      const response = await fetch('http://localhost:8001/sftp/test', {
+      const response = await fetch('http://localhost:8000/sftp/test', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

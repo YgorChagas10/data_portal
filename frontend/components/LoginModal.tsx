@@ -8,7 +8,7 @@ import apiService from '../services/api'
 interface LoginModalProps {
   isOpen: boolean
   onClose: () => void
-  onLogin: (token: string) => void
+  onLogin: (token: string, credentials: { username: string; password: string }) => void
 }
 
 export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps) {
@@ -26,13 +26,20 @@ export default function LoginModal({ isOpen, onClose, onLogin }: LoginModalProps
       const response = await apiService.login(username, password)
       
       if (response.success && response.data?.access_token) {
-        onLogin(response.data.access_token)
+        onLogin(response.data.access_token, { username, password })
         onClose()
       } else {
         setError(response.error || 'Erro ao fazer login')
       }
-    } catch (err) {
-      setError('Erro ao conectar com o servidor')
+    } catch (err: any) {
+      console.error('Login error:', err)
+      if (err.response) {
+        setError(err.response.data?.detail || 'Erro ao fazer login')
+      } else if (err.request) {
+        setError('Não foi possível conectar ao servidor. Verifique sua conexão.')
+      } else {
+        setError('Erro ao processar a requisição')
+      }
     } finally {
       setIsLoading(false)
     }
