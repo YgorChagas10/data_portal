@@ -10,4 +10,7 @@ python-jose==3.3.0
 python-dotenv==0.19.0
 openpyxl==3.0.9
 passlib==1.7.4
-minio==7.1.15 
+minio==7.1.15
+motor==3.3.1
+pymongo==4.5.0
+beanie==1.22.0 

@@ -99,3 +99,6 @@ data-portal/
 3. Commit your changes
 4. Push to the branch
 5. Create a new Pull Request 
+
+MONGODB_URL=mongodb://localhost:27017
+DATABASE_NAME=data_portal
