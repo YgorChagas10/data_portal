@@ -60,16 +60,20 @@ export const apiService = {
   // Auth
   async login(username: string, password: string): Promise<ApiResponse> {
     try {
-      const response = await api.post('/login', { username, password });
-      if (response.success && response.data?.access_token) {
-        localStorage.setItem('token', response.data.access_token);
-      }
-      return response;
-    } catch (error) {
+      const response = await api.post('/api/auth/login', {
+        username,
+        password,
+      });
+      return {
+        success: true,
+        data: response.data,
+        statusCode: response.status,
+      };
+    } catch (error: any) {
       return {
         success: false,
-        statusCode: 500,
-        error: 'Erro ao realizar login',
+        error: error.response?.data?.detail || 'Erro ao fazer login',
+        statusCode: error.response?.status || 500,
       };
     }
   },
@@ -119,6 +123,24 @@ export const apiService = {
         success: false,
         statusCode: 500,
         error: 'Erro ao deletar favorito SFTP',
+      };
+    }
+  },
+
+  async updateSFTPFavorite(id: string, data: any): Promise<ApiResponse> {
+    try {
+      const response = await api.put(`/api/sftp/favorites/${id}`, data);
+      return {
+        success: true,
+        statusCode: response.status,
+        data: response.data
+      };
+    } catch (error) {
+      const axiosError = error as AxiosError;
+      return {
+        success: false,
+        statusCode: axiosError.response?.status || 500,
+        error: 'Erro ao atualizar favorito SFTP',
       };
     }
   },
@@ -206,6 +228,27 @@ export const apiService = {
         success: false,
         statusCode: 500,
         error: 'Erro ao buscar logs de jobs',
+      };
+    }
+  },
+
+  async uploadPowerBIImage(widgetId: string, formData: FormData): Promise<ApiResponse> {
+    try {
+      const response = await api.post(`/api/powerbi/widgets/${widgetId}/image`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return {
+        success: true,
+        data: response.data,
+        statusCode: response.status,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Erro ao fazer upload da imagem',
+        statusCode: error.response?.status || 500,
       };
     }
   },

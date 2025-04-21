@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useState } from 'react'
-import { PlusIcon, PencilIcon } from '@heroicons/react/24/outline'
+import React, { useState, useEffect } from 'react'
+import { PlusIcon, PencilIcon, PhotoIcon, TrashIcon } from '@heroicons/react/24/outline'
+import apiService from '../services/api'
 
 interface PowerBIWidget {
   id: string
@@ -12,6 +13,7 @@ interface PowerBIWidget {
   width?: string
   height?: string
   isEditingTitle: boolean
+  imageUrl?: string
 }
 
 export default function PowerBIWidgets() {
@@ -25,6 +27,28 @@ export default function PowerBIWidgets() {
       isEditingTitle: false
     }
   ])
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleImageUpload = async (widgetId: string, file: File) => {
+    try {
+      setIsLoading(true)
+      const formData = new FormData()
+      formData.append('image', file)
+      
+      const response = await apiService.uploadPowerBIImage(widgetId, formData)
+      if (response.success) {
+        setWidgets(widgets.map(widget => 
+          widget.id === widgetId 
+            ? { ...widget, imageUrl: response.data.url }
+            : widget
+        ))
+      }
+    } catch (error) {
+      console.error('Erro ao fazer upload da imagem:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const addNewWidget = () => {
     const newWidget: PowerBIWidget = {
@@ -59,6 +83,16 @@ export default function PowerBIWidgets() {
       const target = e.target as HTMLInputElement
       updateWidgetTitle(widgetId, target.value)
     }
+  }
+
+  const removeWidget = (id: string) => {
+    setWidgets(widgets.filter(widget => widget.id !== id))
+  }
+
+  const updateWidgetEmbedUrl = (id: string, embedUrl: string) => {
+    setWidgets(widgets.map(widget => 
+      widget.id === id ? { ...widget, embedUrl } : widget
+    ))
   }
 
   return (
@@ -98,51 +132,43 @@ export default function PowerBIWidgets() {
                 </div>
               )}
               <button
-                onClick={() => setWidgets(widgets.filter(w => w.id !== widget.id))}
-                className="text-red-500 hover:text-red-700 transition-colors"
+                onClick={() => removeWidget(widget.id)}
+                className="text-red-500 hover:text-red-700"
               >
-                Remover
+                <TrashIcon className="h-5 w-5" />
               </button>
             </div>
 
             {/* Power BI Preview */}
             <div className="bg-gray-100 rounded-lg p-4 mb-4">
-              {widget.previewImage ? (
+              {widget.imageUrl ? (
                 <img
-                  src={widget.previewImage}
+                  src={widget.imageUrl}
                   alt="Power BI Preview"
                   className="w-full h-48 object-cover rounded-lg"
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-48">
-                  <button
-                    onClick={() => {
-                      // Aqui você pode adicionar a lógica para upload de imagem
-                      const input = document.createElement('input')
-                      input.type = 'file'
-                      input.accept = 'image/*'
-                      input.onchange = (e) => {
-                        const file = (e.target as HTMLInputElement).files?.[0]
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                      <PhotoIcon className="w-8 h-8 mb-3 text-gray-400" />
+                      <p className="mb-2 text-sm text-gray-500">
+                        <span className="font-semibold">Clique para fazer upload</span> ou arraste e solte
+                      </p>
+                      <p className="text-xs text-gray-500">PNG, JPG ou GIF</p>
+                    </div>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
                         if (file) {
-                          const reader = new FileReader()
-                          reader.onload = (event) => {
-                            const updatedWidgets = widgets.map(w =>
-                              w.id === widget.id
-                                ? { ...w, previewImage: event.target?.result as string }
-                                : w
-                            )
-                            setWidgets(updatedWidgets)
-                          }
-                          reader.readAsDataURL(file)
+                          handleImageUpload(widget.id, file)
                         }
-                      }
-                      input.click()
-                    }}
-                    className="p-4 bg-[#4a1045] text-white rounded-full hover:bg-[#3a0d35]"
-                  >
-                    <PlusIcon className="h-8 w-8" />
-                  </button>
-                  <p className="mt-2 text-gray-600">Adicionar Preview</p>
+                      }}
+                    />
+                  </label>
                 </div>
               )}
             </div>
